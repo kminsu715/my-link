@@ -3,7 +3,7 @@ import HeroSection from "../components/HeroSection";
 import LinkCard from "../components/LinkCard";
 
 export default function Home() {
-  const techStack = ["TypeScript", "Next.js", "React", "Tailwind CSS", "AI Agent Pipeline", "Turborepo"];
+  const techStack = ["TypeScript", "Next.js", "React", "Tailwind CSS", "AI Agent Pipeline", "Claude Code", "Turborepo"];
   
   const links = [
     { 
@@ -87,14 +87,14 @@ export default function Home() {
               
               <div className="group relative p-8 md:p-12 bg-[#FFEB3B] dark:bg-[#E91E63] border-8 border-black dark:border-white shadow-[16px_16px_0px_0px_rgba(0,0,0,1)] dark:shadow-[16px_16px_0px_0px_rgba(255,255,255,1)] hover:-translate-y-2 hover:-translate-x-2 hover:shadow-[24px_24px_0px_0px_rgba(0,0,0,1)] dark:hover:shadow-[24px_24px_0px_0px_rgba(255,255,255,1)] transition-all duration-200">
                 <div className="relative z-10">
-                  <h3 className="font-black text-5xl md:text-6xl text-black dark:text-white uppercase mb-4">
-                    팀스파르타
+                  <h3 className="font-black text-4xl md:text-5xl text-black dark:text-white uppercase mb-4 break-keep">
+                    개발 교육 및 멘토링
                   </h3>
-                  <div className="inline-block bg-black dark:bg-white text-white dark:text-black font-black text-xl md:text-2xl px-4 py-2 mb-8 border-4 border-black dark:border-white">
-                    2023.12 - 2025.05
+                  <div className="inline-block bg-black dark:bg-white text-white dark:text-black font-black text-lg md:text-xl px-4 py-2 mb-8 border-4 border-black dark:border-white">
+                    프로그래머스 / 오즈코딩스쿨 / 팀스파르타 등
                   </div>
-                  <p className="text-xl md:text-2xl text-black dark:text-white font-bold leading-tight mt-4 border-l-8 border-black dark:border-white pl-6">
-                    리액트 트랙 튜터로서 80회 이상의 라이브 강의와 AI 기반 리뷰 시스템 구축을 이끌었습니다. 교육 프로세스를 파격적으로 최적화하여 수강생 성취도를 크게 향상시켰습니다.
+                  <p className="text-xl md:text-2xl text-black dark:text-white font-bold leading-tight mt-4 border-l-8 border-black dark:border-white pl-6 break-keep">
+                    100회 이상의 라이브 강의를 진행하며 예비 프론트엔드 개발자들을 이끌었습니다. AI 기반 리뷰 시스템 등 최적화된 프로세스를 도입하여 성취도를 극대화했습니다.
                   </p>
                 </div>
               </div>
