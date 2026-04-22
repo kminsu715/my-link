@@ -11,7 +11,11 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   
-  --animate-fade-in-up: fade-in-up 0.8s ease-out forwards;
+  --animate-fade-in-up: fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-gradient-x: gradient-x 8s ease infinite;
+  --animate-spin-slow: spin-slow 8s linear infinite;
+  --animate-pulse-slow: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 
   @keyframes fade-in-up {
     0% {
@@ -23,8 +27,54 @@
       transform: translateY(0);
     }
   }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-10px);
+    }
+  }
+
+  @keyframes gradient-x {
+    0%, 100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  @keyframes spin-slow {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes pulse-slow {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
 }
 
+.bg-grid-pattern {
+  background-size: 40px 40px;
+  background-image: linear-gradient(to right, rgba(128, 128, 128, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(128, 128, 128, 0.05) 1px, transparent 1px);
+}
+
+.dark .bg-grid-pattern {
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
