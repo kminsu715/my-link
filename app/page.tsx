@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { dummyLinks, LinkItem } from "@/data/links";
+import { useState, useEffect } from "react";
+import { LinkItem } from "@/data/links";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,8 +53,30 @@ const linkFormSchema = z.object({
 type LinkFormValues = z.infer<typeof linkFormSchema>;
 
 export default function Page() {
-  const [links, setLinks] = useState<LinkItem[]>(dummyLinks);
+  const [links, setLinks] = useState<LinkItem[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+  useEffect(() => {
+    const linksRef = collection(db, "users/anonymous/links");
+    const q = query(linksRef, orderBy("createdAt", "desc"));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const fetchedLinks: LinkItem[] = snapshot.docs.map((doc) => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          title: data.title,
+          url: data.url,
+          clickCount: data.clickCount || 0,
+        };
+      });
+      setLinks(fetchedLinks);
+    }, (error) => {
+      console.error("Error fetching links: ", error);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   const form = useForm<LinkFormValues>({
     resolver: zodResolver(linkFormSchema),
@@ -62,22 +86,27 @@ export default function Page() {
     },
   });
 
-  const onSubmit = (data: LinkFormValues) => {
+  const onSubmit = async (data: LinkFormValues) => {
     let finalUrl = data.url;
     if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
       finalUrl = `https://${finalUrl}`;
     }
 
-    const newLink: LinkItem = {
-      id: Date.now().toString(),
-      title: data.title,
-      url: finalUrl,
-      clickCount: 0,
-    };
+    try {
+      const linksRef = collection(db, "users/anonymous/links");
+      await addDoc(linksRef, {
+        title: data.title,
+        url: finalUrl,
+        clickCount: 0,
+        createdAt: serverTimestamp(),
+      });
 
-    setLinks([newLink, ...links]);
-    form.reset();
-    setIsDialogOpen(false);
+      form.reset();
+      setIsDialogOpen(false);
+    } catch (error) {
+      console.error("Error adding link: ", error);
+      alert("링크를 추가하는 중 오류가 발생했습니다.");
+    }
   };
 
   return (
@@ -173,8 +202,12 @@ export default function Page() {
                     />
                   </div>
                   <DialogFooter>
-                    <Button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 transition-colors w-full sm:w-auto">
-                      추가하기
+                    <Button 
+                      type="submit" 
+                      disabled={form.formState.isSubmitting}
+                      className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 transition-colors w-full sm:w-auto disabled:opacity-50"
+                    >
+                      {form.formState.isSubmitting ? "추가 중..." : "추가하기"}
                     </Button>
                   </DialogFooter>
                 </form>
