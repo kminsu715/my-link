@@ -5,7 +5,6 @@ import { dummyLinks, LinkItem } from "@/data/links";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -16,32 +15,68 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+
+const linkFormSchema = z.object({
+  title: z.string().trim().min(1, "제목을 입력해주세요."),
+  url: z.string()
+    .trim()
+    .min(1, "URL을 입력해주세요.")
+    .refine((val) => {
+      let checkUrl = val;
+      if (!checkUrl.startsWith('http://') && !checkUrl.startsWith('https://')) {
+        checkUrl = `https://${checkUrl}`;
+      }
+      
+      const urlPattern = /^(https?:\/\/)?([a-zA-Z0-9-가-힣ㄱ-ㅎㅏ-ㅣ]+\.)+[a-zA-Z가-힣]{2,}(\/.*)?$/;
+      
+      if (checkUrl.startsWith('https://localhost') || checkUrl.startsWith('http://localhost')) {
+        return true;
+      }
+      
+      return urlPattern.test(checkUrl);
+    }, "유효한 도메인 주소(예: example.com)를 입력해주세요."),
+});
+
+type LinkFormValues = z.infer<typeof linkFormSchema>;
 
 export default function Page() {
   const [links, setLinks] = useState<LinkItem[]>(dummyLinks);
-  const [newTitle, setNewTitle] = useState("");
-  const [newUrl, setNewUrl] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  const handleAddLink = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim() || !newUrl.trim()) return;
+  const form = useForm<LinkFormValues>({
+    resolver: zodResolver(linkFormSchema),
+    defaultValues: {
+      title: "",
+      url: "",
+    },
+  });
 
-    let finalUrl = newUrl.trim();
+  const onSubmit = (data: LinkFormValues) => {
+    let finalUrl = data.url;
     if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
       finalUrl = `https://${finalUrl}`;
     }
 
     const newLink: LinkItem = {
       id: Date.now().toString(),
-      title: newTitle.trim(),
+      title: data.title,
       url: finalUrl,
       clickCount: 0,
     };
 
     setLinks([newLink, ...links]);
-    setNewTitle("");
-    setNewUrl("");
+    form.reset();
     setIsDialogOpen(false);
   };
 
@@ -70,7 +105,12 @@ export default function Page() {
         {/* Links Section */}
         <section className="flex flex-col gap-4 w-full">
           {/* Add Link Dialog */}
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) {
+              form.reset();
+            }
+          }}>
             <DialogTrigger asChild>
               <Button className="w-full bg-white/10 hover:bg-white/20 text-white border border-white/10 backdrop-blur-md rounded-xl py-6 font-semibold transition-all shadow-lg hover:shadow-[0_0_20px_-5px_rgba(255,255,255,0.2)] hover:-translate-y-0.5">
                 <Plus className="w-5 h-5 mr-2" />
@@ -84,41 +124,61 @@ export default function Page() {
                   추가할 링크의 제목과 URL 주소를 입력해주세요.
                 </DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleAddLink}>
-                <div className="grid gap-5 py-6">
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="title" className="text-right text-slate-300 font-medium">
-                      제목
-                    </Label>
-                    <Input
-                      id="title"
-                      value={newTitle}
-                      onChange={(e) => setNewTitle(e.target.value)}
-                      placeholder="예: 내 블로그"
-                      className="col-span-3 bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 transition-colors"
-                      autoComplete="off"
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(onSubmit)}>
+                  <div className="grid gap-5 py-6">
+                    <FormField
+                      control={form.control}
+                      name="title"
+                      render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-start gap-4 space-y-0">
+                          <FormLabel className="text-right text-slate-300 font-medium mt-3">
+                            제목
+                          </FormLabel>
+                          <div className="col-span-3">
+                            <FormControl>
+                              <Input
+                                placeholder="예: 내 블로그"
+                                className="bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 transition-colors aria-[invalid=true]:border-red-500/50 aria-[invalid=true]:focus-visible:ring-red-500 aria-[invalid=true]:focus-visible:border-red-500"
+                                autoComplete="off"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage className="text-red-400 text-xs mt-1.5" />
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="url"
+                      render={({ field }) => (
+                        <FormItem className="grid grid-cols-4 items-start gap-4 space-y-0">
+                          <FormLabel className="text-right text-slate-300 font-medium mt-3">
+                            URL 주소
+                          </FormLabel>
+                          <div className="col-span-3">
+                            <FormControl>
+                              <Input
+                                placeholder="https://example.com"
+                                className="bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 transition-colors aria-[invalid=true]:border-red-500/50 aria-[invalid=true]:focus-visible:ring-red-500 aria-[invalid=true]:focus-visible:border-red-500"
+                                autoComplete="off"
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage className="text-red-400 text-xs mt-1.5" />
+                          </div>
+                        </FormItem>
+                      )}
                     />
                   </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <Label htmlFor="url" className="text-right text-slate-300 font-medium">
-                      URL 주소
-                    </Label>
-                    <Input
-                      id="url"
-                      value={newUrl}
-                      onChange={(e) => setNewUrl(e.target.value)}
-                      placeholder="https://example.com"
-                      className="col-span-3 bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus-visible:ring-indigo-500 focus-visible:border-indigo-500 transition-colors"
-                      autoComplete="off"
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 transition-colors w-full sm:w-auto">
-                    추가하기
-                  </Button>
-                </DialogFooter>
-              </form>
+                  <DialogFooter>
+                    <Button type="submit" className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-6 transition-colors w-full sm:w-auto">
+                      추가하기
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </Form>
             </DialogContent>
           </Dialog>
 
