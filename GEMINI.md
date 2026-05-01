@@ -41,6 +41,7 @@ My Link is a "Link-in-bio" service for creators to consolidate all their links i
 - **UI Consistency**: Maintain near-identical layout between Admin and Public views for WYSIWYG.
 - **Validation**: Always verify changes via `npm run build` and `npm run typecheck`.
 - **State**: Use Firebase real-time listeners or React state for instant inline feedback.
+- **Language**: AI 어시스턴트는 모든 대화, 계획(Plan), 태스크(Task), 문서(Walkthrough 등) 작성 및 커밋 메시지를 반드시 **한국어**로 작성해야 합니다 (ALWAYS use Korean for all communications and documentation).
 
 ## ⌨️ Commands
 - `npm run dev`: Dev server (Turbopack)
