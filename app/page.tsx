@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { LinkItem } from "@/data/links";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -55,12 +55,15 @@ type LinkFormValues = z.infer<typeof linkFormSchema>;
 export default function Page() {
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const linksRef = collection(db, "users/anonymous/links");
-    const q = query(linksRef, orderBy("createdAt", "desc"));
+  const fetchLinks = async () => {
+    setIsLoading(true);
+    try {
+      const linksRef = collection(db, "users/anonymous/links");
+      const q = query(linksRef, orderBy("createdAt", "desc"));
+      const snapshot = await getDocs(q);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
       const fetchedLinks: LinkItem[] = snapshot.docs.map((doc) => {
         const data = doc.data();
         return {
@@ -71,11 +74,15 @@ export default function Page() {
         };
       });
       setLinks(fetchedLinks);
-    }, (error) => {
+    } catch (error) {
       console.error("Error fetching links: ", error);
-    });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    return () => unsubscribe();
+  useEffect(() => {
+    fetchLinks();
   }, []);
 
   const form = useForm<LinkFormValues>({
@@ -103,6 +110,7 @@ export default function Page() {
 
       form.reset();
       setIsDialogOpen(false);
+      fetchLinks();
     } catch (error) {
       console.error("Error adding link: ", error);
       alert("링크를 추가하는 중 오류가 발생했습니다.");
@@ -215,54 +223,61 @@ export default function Page() {
             </DialogContent>
           </Dialog>
 
-          {links.map((link, index) => {
-            let domain = "";
-            try {
-              domain = new URL(link.url).hostname;
-            } catch (e) {
-              domain = link.url; // fallback if invalid url
-            }
-            const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+          {isLoading ? (
+            <div className="w-full flex flex-col items-center justify-center py-10 opacity-70">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-500 mb-4" />
+              <p className="text-sm text-slate-400 font-medium">링크를 불러오는 중...</p>
+            </div>
+          ) : (
+            links.map((link, index) => {
+              let domain = "";
+              try {
+                domain = new URL(link.url).hostname;
+              } catch (e) {
+                domain = link.url; // fallback if invalid url
+              }
+              const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
 
-            return (
-              <a
-                key={link.id}
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block w-full outline-none"
-                style={{ animationDelay: `${index * 50}ms` }}
-              >
-                <Card className="w-full overflow-hidden border border-white/5 bg-white/5 backdrop-blur-xl shadow-lg transition-all duration-300 hover:bg-white/10 hover:-translate-y-1 hover:border-white/20 hover:shadow-[0_0_30px_-5px_rgba(99,102,241,0.2)]">
-                  <CardContent className="p-4 flex items-center min-h-[64px] relative group">
-                    {/* Favicon */}
-                    <div className="absolute left-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center p-2 group-hover:scale-110 transition-transform duration-300">
-                      <img 
-                        src={faviconUrl} 
-                        alt={`${link.title} icon`} 
-                        className="w-full h-full object-contain drop-shadow-sm"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    </div>
-                    
-                    {/* Title */}
-                    <h2 className="w-full text-center text-base font-semibold tracking-wide text-slate-200 group-hover:text-white transition-colors">
-                      {link.title}
-                    </h2>
-                    
-                    {/* Right Arrow (subtle) */}
-                    <div className="absolute right-6 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"/>
-                      </svg>
-                    </div>
-                  </CardContent>
-                </Card>
-              </a>
-            );
-          })}
+              return (
+                <a
+                  key={link.id}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block w-full outline-none"
+                  style={{ animationDelay: `${index * 50}ms` }}
+                >
+                  <Card className="w-full overflow-hidden border border-white/5 bg-white/5 backdrop-blur-xl shadow-lg transition-all duration-300 hover:bg-white/10 hover:-translate-y-1 hover:border-white/20 hover:shadow-[0_0_30px_-5px_rgba(99,102,241,0.2)]">
+                    <CardContent className="p-4 flex items-center min-h-[64px] relative group">
+                      {/* Favicon */}
+                      <div className="absolute left-4 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center p-2 group-hover:scale-110 transition-transform duration-300">
+                        <img 
+                          src={faviconUrl} 
+                          alt={`${link.title} icon`} 
+                          className="w-full h-full object-contain drop-shadow-sm"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                      
+                      {/* Title */}
+                      <h2 className="w-full text-center text-base font-semibold tracking-wide text-slate-200 group-hover:text-white transition-colors">
+                        {link.title}
+                      </h2>
+                      
+                      {/* Right Arrow (subtle) */}
+                      <div className="absolute right-6 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M9 18L15 12L9 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-400"/>
+                        </svg>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </a>
+              );
+            })
+          )}
         </section>
 
         {/* Footer */}
