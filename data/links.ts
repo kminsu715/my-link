@@ -3,6 +3,7 @@ export interface LinkItem {
   title: string;
   url: string;
   clickCount?: number; // 추후 추가될 클릭 조회수 카운트
+  updatedAt?: Date; // 마지막 수정 시각
 }
 
 export const dummyLinks: LinkItem[] = [

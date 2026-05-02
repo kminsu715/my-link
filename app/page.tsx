@@ -53,6 +53,21 @@ const linkFormSchema = z.object({
 
 type LinkFormValues = z.infer<typeof linkFormSchema>;
 
+function formatRelativeTime(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffSec < 60) return "방금";
+  if (diffMin < 60) return `${diffMin}분 전`;
+  if (diffHour < 24) return `${diffHour}시간 전`;
+  if (diffDay < 7) return `${diffDay}일 전`;
+  return date.toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
+}
+
 function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -101,6 +116,7 @@ export default function Page() {
           title: data.title,
           url: data.url,
           clickCount: data.clickCount || 0,
+          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : undefined,
         };
       });
       setLinks(fetchedLinks);
@@ -181,6 +197,7 @@ export default function Page() {
       await updateDoc(linkRef, {
         title: data.title,
         url: finalUrl,
+        updatedAt: serverTimestamp(),
       });
 
       setEditingLinkId(null);
@@ -312,9 +329,11 @@ export default function Page() {
                     <Button 
                       type="submit" 
                       disabled={form.formState.isSubmitting}
-                      className="bg-indigo-600 dark:bg-indigo-500/80 hover:bg-indigo-500 dark:hover:bg-indigo-500 text-white font-semibold px-6 transition-colors w-full sm:w-auto disabled:opacity-50"
+                      className="bg-indigo-600 dark:bg-indigo-500/80 hover:bg-indigo-500 dark:hover:bg-indigo-500 text-white font-semibold px-6 transition-colors w-full sm:w-auto disabled:opacity-70 min-w-[88px]"
                     >
-                      {form.formState.isSubmitting ? "추가 중..." : "추가하기"}
+                      {form.formState.isSubmitting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : "추가하기"}
                     </Button>
                   </DialogFooter>
                 </form>
@@ -353,9 +372,18 @@ export default function Page() {
           </Dialog>
 
           {isLoading ? (
-            <div className="w-full flex flex-col items-center justify-center py-10 opacity-70">
-              <Loader2 className="w-8 h-8 animate-spin text-indigo-500 dark:text-indigo-400 mb-4" />
-              <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">링크를 불러오는 중...</p>
+            <div className="w-full flex flex-col items-center justify-center py-16">
+              <div className="relative">
+                {/* 바깥 링 */}
+                <div className="w-14 h-14 rounded-full border-4 border-indigo-100 dark:border-slate-700" />
+                {/* 회전 스피너 */}
+                <div className="absolute inset-0 w-14 h-14 rounded-full border-4 border-transparent border-t-indigo-500 dark:border-t-indigo-400 animate-spin" />
+                {/* 중앙 점 */}
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="w-2 h-2 rounded-full bg-indigo-500 dark:bg-indigo-400 animate-pulse" />
+                </div>
+              </div>
+              <p className="text-sm text-slate-400 dark:text-slate-500 font-medium mt-5 tracking-wide">불러오는 중...</p>
             </div>
           ) : (
             links.map((link, index) => {
@@ -409,9 +437,11 @@ export default function Page() {
                             <Button 
                               type="submit" 
                               disabled={editForm.formState.isSubmitting}
-                              className="h-8 px-3 text-xs bg-indigo-600 dark:bg-indigo-500/80 hover:bg-indigo-500 dark:hover:bg-indigo-500 text-white shadow-md shadow-indigo-200 dark:shadow-none"
+                              className="h-8 px-3 text-xs bg-indigo-600 dark:bg-indigo-500/80 hover:bg-indigo-500 dark:hover:bg-indigo-500 text-white shadow-md shadow-indigo-200 dark:shadow-none min-w-[44px]"
                             >
-                              {editForm.formState.isSubmitting ? "저장 중..." : "저장"}
+                              {editForm.formState.isSubmitting ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : "저장"}
                             </Button>
                           </div>
                         </form>
@@ -456,9 +486,16 @@ export default function Page() {
                         </div>
                         
                         {/* Title */}
-                        <h2 className="w-full text-center text-base font-semibold tracking-wide text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-white transition-colors px-14">
-                          {link.title}
-                        </h2>
+                        <div className="w-full flex flex-col items-center px-14">
+                          <h2 className="text-base font-semibold tracking-wide text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-white transition-colors text-center">
+                            {link.title}
+                          </h2>
+                          {link.updatedAt && (
+                            <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-0.5">
+                              수정됨 · {formatRelativeTime(link.updatedAt)}
+                            </p>
+                          )}
+                        </div>
                       </a>
                       
                       {/* Action Buttons */}
