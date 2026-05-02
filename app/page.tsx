@@ -486,16 +486,9 @@ export default function Page() {
                         </div>
                         
                         {/* Title */}
-                        <div className="w-full flex flex-col items-center px-14">
-                          <h2 className="text-base font-semibold tracking-wide text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-white transition-colors text-center">
-                            {link.title}
-                          </h2>
-                          {link.updatedAt && (
-                            <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-0.5">
-                              수정됨 · {formatRelativeTime(link.updatedAt)}
-                            </p>
-                          )}
-                        </div>
+                        <h2 className="w-full text-center text-base font-semibold tracking-wide text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-white transition-colors px-14">
+                          {link.title}
+                        </h2>
                       </a>
                       
                       {/* Action Buttons */}
