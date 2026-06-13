@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { LinkItem } from "@/data/links";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, getDocs, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, orderBy, serverTimestamp, doc, updateDoc, deleteDoc, onSnapshot, where } from "firebase/firestore";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,8 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Loader2, Pencil, Trash2, Sun, Moon } from "lucide-react";
-import { useTheme } from "next-themes";
+import { Plus, Loader2, Pencil, Trash2, Check, X } from "lucide-react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -29,6 +28,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { useAuth } from "@/lib/auth-context";
+import { Header } from "@/components/header";
 
 const linkFormSchema = z.object({
   title: z.string().trim().min(1, "제목을 입력해주세요."),
@@ -68,33 +69,17 @@ function formatRelativeTime(date: Date): string {
   return date.toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
 }
 
-function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return <div className="w-10 h-10" />;
-  }
-
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-      className="rounded-full w-10 h-10 bg-white/50 dark:bg-slate-800/50 hover:bg-white/80 dark:hover:bg-slate-700/50 backdrop-blur-md text-slate-700 dark:text-slate-300 transition-all border border-slate-200/50 dark:border-slate-700/50 shadow-sm"
-    >
-      <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-      <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-      <span className="sr-only">Toggle theme</span>
-    </Button>
-  );
+interface UserProfile {
+  username: string;
+  displayName: string;
+  bio: string;
+  photoURL: string;
 }
 
 export default function Page() {
+  const { user, loading: authLoading, signInWithGoogle } = useAuth();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -102,10 +87,50 @@ export default function Page() {
   const [deleteLinkId, setDeleteLinkId] = useState<string | null>(null);
   const [deleteLinkTitle, setDeleteLinkTitle] = useState<string>("");
 
+  // 프로필 인라인 편집용 상태
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [isEditingDisplayName, setIsEditingDisplayName] = useState(false);
+  const [isEditingBio, setIsEditingBio] = useState(false);
+
+  const [editUsername, setEditUsername] = useState("");
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editBio, setEditBio] = useState("");
+
+  // displayName(URL 슬러그) 중복 확인용 상태
+  const [isCheckingSlug, setIsCheckingSlug] = useState(false);
+  const [slugError, setSlugError] = useState("");
+  const [isSlugAvailable, setIsSlugAvailable] = useState(false);
+
+  // 외부 클릭 감지를 위한 refs
+  const usernameRef = useRef<HTMLDivElement>(null);
+  const displayNameRef = useRef<HTMLDivElement>(null);
+  const bioRef = useRef<HTMLDivElement>(null);
+
+  // 외부 클릭 시 편집 취소 처리
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (isEditingUsername && usernameRef.current && !usernameRef.current.contains(event.target as Node)) {
+        setIsEditingUsername(false);
+      }
+      if (isEditingDisplayName && displayNameRef.current && !displayNameRef.current.contains(event.target as Node)) {
+        setIsEditingDisplayName(false);
+      }
+      if (isEditingBio && bioRef.current && !bioRef.current.contains(event.target as Node)) {
+        setIsEditingBio(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isEditingUsername, isEditingDisplayName, isEditingBio]);
+
   const fetchLinks = async () => {
+    if (!user) return;
     setIsLoading(true);
     try {
-      const linksRef = collection(db, "users/anonymous/links");
+      const linksRef = collection(db, "users", user.uid, "links");
       const q = query(linksRef, orderBy("createdAt", "desc"));
       const snapshot = await getDocs(q);
 
@@ -128,8 +153,104 @@ export default function Page() {
   };
 
   useEffect(() => {
+    if (!user) {
+      setProfile(null);
+      setLinks([]);
+      setIsLoading(false);
+      return;
+    }
+
+    // 1. Listen for user profile document
+    const userDocRef = doc(db, "users", user.uid);
+    const unsubscribeProfile = onSnapshot(userDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setProfile({
+          username: data.username || "",
+          displayName: data.displayName || "",
+          bio: data.bio || "",
+          photoURL: data.photoURL || "",
+        });
+      }
+    });
+
+    // 2. Fetch links
     fetchLinks();
-  }, []);
+
+    return () => {
+      unsubscribeProfile();
+    };
+  }, [user]);
+
+  // displayName 중복 검사 헬퍼 함수
+  const checkDisplayNameDuplicate = async (newDisplayName: string, currentUid: string) => {
+    if (!newDisplayName) return false;
+    const usersRef = collection(db, "users");
+    const q = query(usersRef, where("displayName", "==", newDisplayName.trim()));
+    const querySnapshot = await getDocs(q);
+    
+    let isDuplicate = false;
+    querySnapshot.forEach((docSnap) => {
+      if (docSnap.id !== currentUid) {
+        isDuplicate = true;
+      }
+    });
+    return isDuplicate;
+  };
+
+  // displayName 실시간 중복 체크 (디바운스)
+  useEffect(() => {
+    if (!isEditingDisplayName || editDisplayName === profile?.displayName) {
+      setSlugError("");
+      setIsSlugAvailable(false);
+      setIsCheckingSlug(false);
+      return;
+    }
+
+    const trimmed = editDisplayName.trim();
+    const slugRegex = /^[a-z0-9_-]+$/;
+
+    if (!trimmed) {
+      setSlugError("슬러그를 입력해주세요.");
+      setIsSlugAvailable(false);
+      return;
+    }
+    if (!slugRegex.test(trimmed)) {
+      setSlugError("영문 소문자, 숫자, 하이픈(-), 언더바(_)만 사용 가능합니다.");
+      setIsSlugAvailable(false);
+      return;
+    }
+    if (trimmed.length < 2 || trimmed.length > 20) {
+      setSlugError("2자 이상 20자 이하로 입력해주세요.");
+      setIsSlugAvailable(false);
+      return;
+    }
+
+    setSlugError("");
+    setIsCheckingSlug(true);
+    setIsSlugAvailable(false);
+
+    const debounceTimer = setTimeout(async () => {
+      try {
+        if (!user) return;
+        const isDuplicate = await checkDisplayNameDuplicate(trimmed, user.uid);
+        if (isDuplicate) {
+          setSlugError("이미 사용 중인 슬러그입니다.");
+          setIsSlugAvailable(false);
+        } else {
+          setSlugError("");
+          setIsSlugAvailable(true);
+        }
+      } catch (err) {
+        console.error("중복 확인 오류: ", err);
+        setSlugError("중복 확인 중 오류가 발생했습니다.");
+      } finally {
+        setIsCheckingSlug(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(debounceTimer);
+  }, [editDisplayName, isEditingDisplayName, profile?.displayName, user]);
 
   const form = useForm<LinkFormValues>({
     resolver: zodResolver(linkFormSchema),
@@ -148,14 +269,17 @@ export default function Page() {
   });
 
   const onSubmit = async (data: LinkFormValues) => {
+    if (!user) return;
+
     let finalUrl = data.url;
     if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
       finalUrl = `https://${finalUrl}`;
     }
 
     try {
-      const linksRef = collection(db, "users/anonymous/links");
+      const linksRef = collection(db, "users", user.uid, "links");
       await addDoc(linksRef, {
+        uid: user.uid,
         title: data.title,
         url: finalUrl,
         clickCount: 0,
@@ -185,7 +309,7 @@ export default function Page() {
   };
 
   const onEditSubmit = async (data: LinkFormValues) => {
-    if (!editingLinkId) return;
+    if (!user || !editingLinkId) return;
     
     let finalUrl = data.url;
     if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
@@ -193,7 +317,7 @@ export default function Page() {
     }
 
     try {
-      const linkRef = doc(db, "users/anonymous/links", editingLinkId);
+      const linkRef = doc(db, "users", user.uid, "links", editingLinkId);
       await updateDoc(linkRef, {
         title: data.title,
         url: finalUrl,
@@ -214,10 +338,10 @@ export default function Page() {
   };
 
   const handleDelete = async () => {
-    if (!deleteLinkId) return;
+    if (!user || !deleteLinkId) return;
     
     try {
-      const linkRef = doc(db, "users/anonymous/links", deleteLinkId);
+      const linkRef = doc(db, "users", user.uid, "links", deleteLinkId);
       await deleteDoc(linkRef);
       setDeleteLinkId(null);
       fetchLinks();
@@ -227,31 +351,372 @@ export default function Page() {
     }
   };
 
+  // 프로필 편집 시작 핸들러
+  const startEditingUsername = () => {
+    setEditUsername(profile?.username || "");
+    setIsEditingUsername(true);
+  };
+
+  const startEditingDisplayName = () => {
+    setEditDisplayName(profile?.displayName || "");
+    setIsEditingDisplayName(true);
+    setSlugError("");
+    setIsSlugAvailable(false);
+  };
+
+  const startEditingBio = () => {
+    setEditBio(profile?.bio || "");
+    setIsEditingBio(true);
+  };
+
+  // 프로필 업데이트 핸들러
+  const handleUpdateUsername = async () => {
+    const trimmed = editUsername.trim();
+    if (!user || !trimmed) return;
+    
+    // 원래 값과 같은 경우 업데이트 없이 편집 종료
+    if (trimmed === profile?.username) {
+      setIsEditingUsername(false);
+      return;
+    }
+
+    const previousProfile = profile;
+    if (profile) {
+      setProfile({
+        ...profile,
+        username: trimmed,
+      });
+    }
+    setIsEditingUsername(false);
+
+    try {
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, {
+        username: trimmed,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Error updating username: ", error);
+      alert("이름 수정 중 오류가 발생했습니다.");
+      setProfile(previousProfile);
+    }
+  };
+
+  const handleUpdateDisplayName = async () => {
+    const trimmed = editDisplayName.trim();
+    if (!user || (!isSlugAvailable && trimmed !== profile?.displayName) || isCheckingSlug || slugError) return;
+    
+    // 만약 현재 슬러그와 입력된 슬러그가 같다면 API 요청 없이 편집만 종료
+    if (trimmed === profile?.displayName) {
+      setIsEditingDisplayName(false);
+      return;
+    }
+
+    const previousProfile = profile;
+    if (profile) {
+      setProfile({
+        ...profile,
+        displayName: trimmed,
+      });
+    }
+    setIsEditingDisplayName(false);
+
+    try {
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, {
+        displayName: trimmed,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Error updating displayName: ", error);
+      alert("슬러그 수정 중 오류가 발생했습니다.");
+      setProfile(previousProfile);
+    }
+  };
+
+  const handleUpdateBio = async () => {
+    if (!user) return;
+    const trimmed = editBio.trim();
+
+    // 원래 값과 같은 경우 업데이트 없이 편집 종료
+    if (trimmed === (profile?.bio || "")) {
+      setIsEditingBio(false);
+      return;
+    }
+
+    const previousProfile = profile;
+    if (profile) {
+      setProfile({
+        ...profile,
+        bio: trimmed,
+      });
+    }
+    setIsEditingBio(false);
+
+    try {
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, {
+        bio: trimmed,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Error updating bio: ", error);
+      alert("소개글 수정 중 오류가 발생했습니다.");
+      setProfile(previousProfile);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-svh flex-col items-center justify-center bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-50 via-white to-cyan-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950">
+        <div className="relative">
+          <div className="w-14 h-14 rounded-full border-4 border-indigo-100 dark:border-slate-700" />
+          <div className="absolute inset-0 w-14 h-14 rounded-full border-4 border-transparent border-t-indigo-500 dark:border-t-indigo-400 animate-spin" />
+        </div>
+        <p className="text-sm text-slate-400 dark:text-slate-500 font-medium mt-5 tracking-wide">준비 중...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex min-h-svh flex-col items-center py-20 px-4 sm:px-6 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-50 via-white to-cyan-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 text-slate-800 dark:text-slate-200 font-sans selection:bg-indigo-500/30 transition-colors duration-500">
+        <Header />
+        
+        <main className="w-full max-w-2xl flex flex-col gap-12 mt-10 animate-in fade-in slide-in-from-bottom-4 duration-1000 items-center text-center">
+          {/* Hero Content */}
+          <div className="space-y-6 max-w-lg mt-12">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 text-xs font-semibold border border-indigo-100 dark:border-indigo-900/30">
+              ✨ 1분 만에 끝내는 링크 관리
+            </div>
+            <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight leading-[1.15] bg-gradient-to-r from-indigo-600 via-slate-900 to-indigo-500 dark:from-indigo-400 dark:via-white dark:to-cyan-400 bg-clip-text text-transparent">
+              나만의 모든 링크를<br />단 하나의 페이지로.
+            </h2>
+            <p className="text-base text-slate-500 dark:text-slate-400 leading-relaxed max-w-md mx-auto">
+              유튜브, 블로그, SNS 등 분산된 나의 채널들을 아름답게 통합하세요. Google 로그인 한 번으로 프로필 구축부터 실시간 관리까지 직관적인 경험을 제공합니다.
+            </p>
+          </div>
+
+          {/* Call To Action Card */}
+          <Card className="w-full max-w-md border border-white/60 dark:border-slate-800 bg-white/70 dark:bg-slate-900/50 backdrop-blur-xl shadow-2xl p-8 flex flex-col items-center gap-6 rounded-2xl relative overflow-hidden">
+            {/* Background decoration */}
+            <div className="absolute -top-16 -right-16 w-32 h-32 bg-indigo-400/10 rounded-full blur-2xl" />
+            <div className="absolute -bottom-16 -left-16 w-32 h-32 bg-cyan-400/10 rounded-full blur-2xl" />
+
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40 flex items-center justify-center text-indigo-500 dark:text-indigo-400 shadow-inner">
+              <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+            </div>
+            
+            <div className="space-y-2 text-center">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100">서비스 이용을 위해 로그인이 필요합니다</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 max-w-[280px] leading-normal mx-auto">
+                구글 소셜 계정으로 로그인하시면 고유 프로필 및 무제한 링크 생성 기능을 무료로 이용하실 수 있습니다.
+              </p>
+            </div>
+
+            <Button
+              onClick={signInWithGoogle}
+              className="w-full bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500 dark:hover:bg-indigo-400 text-white font-semibold py-6 rounded-xl shadow-lg shadow-indigo-500/20 dark:shadow-none hover:shadow-xl hover:shadow-indigo-500/30 transition-all flex items-center justify-center gap-3 text-sm hover:-translate-y-0.5 cursor-pointer"
+            >
+              <svg className="w-4 h-4 text-white" viewBox="0 0 24 24">
+                <path
+                  fill="currentColor"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="currentColor"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="currentColor"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                />
+                <path
+                  fill="currentColor"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                />
+              </svg>
+              <span>Google 계정으로 시작하기</span>
+            </Button>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-svh flex-col items-center py-20 px-4 sm:px-6 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-50 via-white to-cyan-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-950 text-slate-800 dark:text-slate-200 font-sans selection:bg-indigo-500/30 transition-colors duration-500">
-      
-      {/* Theme Toggle */}
-      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-50">
-        <ThemeToggle />
-      </div>
+      <Header totalLinks={links.length} profile={profile} />
 
-      <main className="w-full max-w-[28rem] flex flex-col gap-8 animate-in fade-in slide-in-from-bottom-4 duration-1000 relative">
+      <main className="w-full max-w-[28rem] flex flex-col gap-8 mt-12 animate-in fade-in slide-in-from-bottom-4 duration-1000 relative">
         
         {/* Profile Section */}
         <section className="flex flex-col items-center text-center gap-4 mb-4">
           <div className="w-24 h-24 rounded-full bg-gradient-to-tr from-indigo-400 to-cyan-400 dark:from-indigo-500/80 dark:to-purple-500/80 p-[2px] shadow-lg shadow-indigo-200 dark:shadow-indigo-500/10">
             <div className="w-full h-full rounded-full bg-white dark:bg-slate-900 flex items-center justify-center border-2 border-transparent overflow-hidden">
-              <span className="text-3xl font-bold bg-gradient-to-br from-indigo-500 to-cyan-500 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent">
-                M
-              </span>
+              {user?.photoURL || profile?.photoURL ? (
+                <img src={user?.photoURL || profile?.photoURL || undefined} alt={profile?.username || "User"} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-3xl font-bold bg-gradient-to-br from-indigo-500 to-cyan-500 dark:from-indigo-400 dark:to-purple-400 bg-clip-text text-transparent">
+                  {profile?.username ? profile.username[0].toUpperCase() : "M"}
+                </span>
+              )}
             </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">My Name</h1>
-            <p className="text-sm font-medium text-indigo-500 dark:text-indigo-400 mt-1">@my_link_slug</p>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-3 max-w-[260px] mx-auto leading-relaxed">
-              안녕하세요! 유튜버 겸 크리에이터입니다. 아래 링크에서 제 모든 활동을 확인해 보세요 ✨
-            </p>
+          <div className="w-full flex flex-col items-center">
+            {/* Username Edit Form */}
+            {isEditingUsername ? (
+              <div ref={usernameRef} className="flex items-center justify-center gap-1.5 mt-1.5">
+                <Input
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value)}
+                  className="w-48 text-center text-lg font-bold h-9 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus-visible:ring-indigo-500 focus-visible:border-indigo-500"
+                  placeholder="이름 입력"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleUpdateUsername();
+                    if (e.key === "Escape") setIsEditingUsername(false);
+                  }}
+                />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="w-8 h-8 rounded-full text-green-600 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-950/20 cursor-pointer"
+                  onClick={handleUpdateUsername}
+                  disabled={!editUsername.trim()}
+                >
+                  <Check className="w-4 h-4" />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="w-8 h-8 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer"
+                  onClick={() => setIsEditingUsername(false)}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <h1
+                onClick={startEditingUsername}
+                className="group inline-flex items-center justify-center gap-1.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-800/50 rounded-lg px-2.5 py-0.5 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all"
+              >
+                {profile?.username || "My Name"}
+                <Pencil className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </h1>
+            )}
+
+            {/* DisplayName (URL Slug) Edit Form */}
+            {isEditingDisplayName ? (
+              <div ref={displayNameRef} className="flex flex-col items-center gap-1.5 mt-1.5 w-full">
+                <div className="flex items-center justify-center gap-1.5">
+                  <div className="relative flex items-center">
+                    <span className="absolute left-2.5 text-slate-400 text-sm font-medium">@</span>
+                    <Input
+                      value={editDisplayName}
+                      onChange={(e) => setEditDisplayName(e.target.value)}
+                      className="w-48 pl-6 text-left text-sm font-medium h-9 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus-visible:ring-indigo-500 focus-visible:border-indigo-500"
+                      placeholder="slug"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && (isSlugAvailable || editDisplayName.trim() === profile?.displayName)) {
+                          handleUpdateDisplayName();
+                        }
+                        if (e.key === "Escape") setIsEditingDisplayName(false);
+                      }}
+                    />
+                  </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="w-8 h-8 rounded-full text-green-600 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-950/20 cursor-pointer"
+                    onClick={handleUpdateDisplayName}
+                    disabled={(!isSlugAvailable && editDisplayName.trim() !== profile?.displayName) || isCheckingSlug || !!slugError}
+                  >
+                    <Check className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="w-8 h-8 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer"
+                    onClick={() => setIsEditingDisplayName(false)}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+                {/* 실시간 피드백 메시지 */}
+                <div className="text-[11px] min-h-[16px] mt-0.5">
+                  {isCheckingSlug && (
+                    <span className="text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> 사용 가능 여부 확인 중...
+                    </span>
+                  )}
+                  {!isCheckingSlug && slugError && (
+                    <span className="text-red-500 dark:text-red-400 font-medium">{slugError}</span>
+                  )}
+                  {!isCheckingSlug && !slugError && isSlugAvailable && editDisplayName.trim() !== profile?.displayName && (
+                    <span className="text-green-600 dark:text-green-400 font-medium">사용 가능한 슬러그입니다.</span>
+                  )}
+                  {!isCheckingSlug && !slugError && editDisplayName.trim() === profile?.displayName && isEditingDisplayName && (
+                    <span className="text-slate-400 dark:text-slate-500 font-medium">현재 내 슬러그입니다.</span>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p
+                onClick={startEditingDisplayName}
+                className="group inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-indigo-500 dark:text-indigo-400 mt-1 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-800/50 rounded-lg px-2.5 py-0.5 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all"
+              >
+                @{profile?.displayName || "my_link_slug"}
+                <Pencil className="w-3.5 h-3.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </p>
+            )}
+
+            {/* Bio Edit Form */}
+            {isEditingBio ? (
+              <div ref={bioRef} className="flex flex-col items-center gap-1.5 mt-2 w-full max-w-[280px] mx-auto">
+                <textarea
+                  value={editBio}
+                  onChange={(e) => setEditBio(e.target.value)}
+                  className="w-full text-center text-sm min-h-[60px] max-h-[120px] p-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 resize-none text-slate-800 dark:text-slate-200"
+                  placeholder="소개글 입력"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                      handleUpdateBio();
+                    }
+                    if (e.key === "Escape") setIsEditingBio(false);
+                  }}
+                />
+                <div className="flex gap-2 justify-end w-full">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer"
+                    onClick={() => setIsEditingBio(false)}
+                  >
+                    취소
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-7 px-3 text-xs bg-indigo-600 hover:bg-indigo-500 dark:bg-indigo-500/80 dark:hover:bg-indigo-500 text-white cursor-pointer"
+                    onClick={handleUpdateBio}
+                  >
+                    저장
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p
+                onClick={startEditingBio}
+                className="group inline-flex items-center justify-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 mt-3 max-w-[260px] mx-auto leading-relaxed cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-800/50 rounded-lg px-2.5 py-1 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all"
+              >
+                {profile?.bio || "안녕하세요! 아래 링크에서 제 모든 활동을 확인해 보세요 ✨"}
+                <Pencil className="w-3.5 h-3.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+              </p>
+            )}
           </div>
         </section>
 
@@ -270,7 +735,7 @@ export default function Page() {
                 링크 추가
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px] bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl text-slate-800 dark:text-slate-200 border-white/60 dark:border-slate-800 shadow-2xl">
+            <DialogContent className="sm:max-w-[425px] bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl text-slate-800 dark:text-slate-200 border-white/60 dark:border-slate-880 shadow-2xl">
               <DialogHeader>
                 <DialogTitle className="text-xl text-slate-900 dark:text-slate-100">새로운 링크 추가</DialogTitle>
                 <DialogDescription className="text-slate-500 dark:text-slate-400">
