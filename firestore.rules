@@ -1,0 +1,48 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. users/{userId} 문서 (사용자 프로필 정보)
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+      
+      // 프로필 수정 시 방어적 검증 수행
+      allow update: if request.auth != null 
+                    && request.auth.uid == userId 
+                    && isValidProfileUpdate();
+
+      function isValidProfileUpdate() {
+        let incomingData = request.resource.data;
+        let existingData = resource.data;
+        
+        // 기존 문서에 해당 필드가 없을 때의 룰 평가 에러 방지 (in 연산자 활용 방어 코드)
+        let isEmailValid = !('email' in existingData) || (incomingData.email == request.auth.token.email);
+        let isCreatedAtValid = !('createdAt' in existingData) || (incomingData.createdAt == existingData.createdAt);
+        
+        return incomingData.username is string && incomingData.username.trim().size() > 0
+            && incomingData.displayName is string && incomingData.displayName.trim().size() > 0
+            && isEmailValid
+            && isCreatedAtValid;
+      }
+
+      // 2. users/{userId}/links/{linkId} 문서 (등록한 링크 목록)
+      match /links/{linkId} {
+        allow read: if true;
+        allow delete: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null 
+                              && request.auth.uid == userId 
+                              && isValidLinkData();
+
+        function isValidLinkData() {
+          let linkData = request.resource.data;
+          
+          return linkData.title is string && linkData.title.trim().size() > 0
+              && linkData.url is string && linkData.url.trim().size() > 0;
+        }
+      }
+    }
+  }
+}

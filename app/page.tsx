@@ -89,21 +89,13 @@ export default function Page() {
 
   // 프로필 인라인 편집용 상태
   const [isEditingUsername, setIsEditingUsername] = useState(false);
-  const [isEditingDisplayName, setIsEditingDisplayName] = useState(false);
   const [isEditingBio, setIsEditingBio] = useState(false);
 
   const [editUsername, setEditUsername] = useState("");
-  const [editDisplayName, setEditDisplayName] = useState("");
   const [editBio, setEditBio] = useState("");
-
-  // displayName(URL 슬러그) 중복 확인용 상태
-  const [isCheckingSlug, setIsCheckingSlug] = useState(false);
-  const [slugError, setSlugError] = useState("");
-  const [isSlugAvailable, setIsSlugAvailable] = useState(false);
 
   // 외부 클릭 감지를 위한 refs
   const usernameRef = useRef<HTMLDivElement>(null);
-  const displayNameRef = useRef<HTMLDivElement>(null);
   const bioRef = useRef<HTMLDivElement>(null);
 
   // 외부 클릭 시 편집 취소 처리
@@ -111,9 +103,6 @@ export default function Page() {
     function handleClickOutside(event: MouseEvent) {
       if (isEditingUsername && usernameRef.current && !usernameRef.current.contains(event.target as Node)) {
         setIsEditingUsername(false);
-      }
-      if (isEditingDisplayName && displayNameRef.current && !displayNameRef.current.contains(event.target as Node)) {
-        setIsEditingDisplayName(false);
       }
       if (isEditingBio && bioRef.current && !bioRef.current.contains(event.target as Node)) {
         setIsEditingBio(false);
@@ -124,7 +113,7 @@ export default function Page() {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, [isEditingUsername, isEditingDisplayName, isEditingBio]);
+  }, [isEditingUsername, isEditingBio]);
 
   const fetchLinks = async () => {
     if (!user) return;
@@ -182,75 +171,7 @@ export default function Page() {
     };
   }, [user]);
 
-  // displayName 중복 검사 헬퍼 함수
-  const checkDisplayNameDuplicate = async (newDisplayName: string, currentUid: string) => {
-    if (!newDisplayName) return false;
-    const usersRef = collection(db, "users");
-    const q = query(usersRef, where("displayName", "==", newDisplayName.trim()));
-    const querySnapshot = await getDocs(q);
-    
-    let isDuplicate = false;
-    querySnapshot.forEach((docSnap) => {
-      if (docSnap.id !== currentUid) {
-        isDuplicate = true;
-      }
-    });
-    return isDuplicate;
-  };
 
-  // displayName 실시간 중복 체크 (디바운스)
-  useEffect(() => {
-    if (!isEditingDisplayName || editDisplayName === profile?.displayName) {
-      setSlugError("");
-      setIsSlugAvailable(false);
-      setIsCheckingSlug(false);
-      return;
-    }
-
-    const trimmed = editDisplayName.trim();
-    const slugRegex = /^[a-z0-9_-]+$/;
-
-    if (!trimmed) {
-      setSlugError("슬러그를 입력해주세요.");
-      setIsSlugAvailable(false);
-      return;
-    }
-    if (!slugRegex.test(trimmed)) {
-      setSlugError("영문 소문자, 숫자, 하이픈(-), 언더바(_)만 사용 가능합니다.");
-      setIsSlugAvailable(false);
-      return;
-    }
-    if (trimmed.length < 2 || trimmed.length > 20) {
-      setSlugError("2자 이상 20자 이하로 입력해주세요.");
-      setIsSlugAvailable(false);
-      return;
-    }
-
-    setSlugError("");
-    setIsCheckingSlug(true);
-    setIsSlugAvailable(false);
-
-    const debounceTimer = setTimeout(async () => {
-      try {
-        if (!user) return;
-        const isDuplicate = await checkDisplayNameDuplicate(trimmed, user.uid);
-        if (isDuplicate) {
-          setSlugError("이미 사용 중인 슬러그입니다.");
-          setIsSlugAvailable(false);
-        } else {
-          setSlugError("");
-          setIsSlugAvailable(true);
-        }
-      } catch (err) {
-        console.error("중복 확인 오류: ", err);
-        setSlugError("중복 확인 중 오류가 발생했습니다.");
-      } finally {
-        setIsCheckingSlug(false);
-      }
-    }, 500);
-
-    return () => clearTimeout(debounceTimer);
-  }, [editDisplayName, isEditingDisplayName, profile?.displayName, user]);
 
   const form = useForm<LinkFormValues>({
     resolver: zodResolver(linkFormSchema),
@@ -357,12 +278,6 @@ export default function Page() {
     setIsEditingUsername(true);
   };
 
-  const startEditingDisplayName = () => {
-    setEditDisplayName(profile?.displayName || "");
-    setIsEditingDisplayName(true);
-    setSlugError("");
-    setIsSlugAvailable(false);
-  };
 
   const startEditingBio = () => {
     setEditBio(profile?.bio || "");
@@ -402,37 +317,6 @@ export default function Page() {
     }
   };
 
-  const handleUpdateDisplayName = async () => {
-    const trimmed = editDisplayName.trim();
-    if (!user || (!isSlugAvailable && trimmed !== profile?.displayName) || isCheckingSlug || slugError) return;
-    
-    // 만약 현재 슬러그와 입력된 슬러그가 같다면 API 요청 없이 편집만 종료
-    if (trimmed === profile?.displayName) {
-      setIsEditingDisplayName(false);
-      return;
-    }
-
-    const previousProfile = profile;
-    if (profile) {
-      setProfile({
-        ...profile,
-        displayName: trimmed,
-      });
-    }
-    setIsEditingDisplayName(false);
-
-    try {
-      const userRef = doc(db, "users", user.uid);
-      await updateDoc(userRef, {
-        displayName: trimmed,
-        updatedAt: serverTimestamp(),
-      });
-    } catch (error) {
-      console.error("Error updating displayName: ", error);
-      alert("슬러그 수정 중 오류가 발생했습니다.");
-      setProfile(previousProfile);
-    }
-  };
 
   const handleUpdateBio = async () => {
     if (!user) return;
@@ -608,71 +492,10 @@ export default function Page() {
               </h1>
             )}
 
-            {/* DisplayName (URL Slug) Edit Form */}
-            {isEditingDisplayName ? (
-              <div ref={displayNameRef} className="flex flex-col items-center gap-1.5 mt-1.5 w-full">
-                <div className="flex items-center justify-center gap-1.5">
-                  <div className="relative flex items-center">
-                    <span className="absolute left-2.5 text-slate-400 text-sm font-medium">@</span>
-                    <Input
-                      value={editDisplayName}
-                      onChange={(e) => setEditDisplayName(e.target.value)}
-                      className="w-48 pl-6 text-left text-sm font-medium h-9 bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 focus-visible:ring-indigo-500 focus-visible:border-indigo-500"
-                      placeholder="slug"
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && (isSlugAvailable || editDisplayName.trim() === profile?.displayName)) {
-                          handleUpdateDisplayName();
-                        }
-                        if (e.key === "Escape") setIsEditingDisplayName(false);
-                      }}
-                    />
-                  </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="w-8 h-8 rounded-full text-green-600 hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-950/20 cursor-pointer"
-                    onClick={handleUpdateDisplayName}
-                    disabled={(!isSlugAvailable && editDisplayName.trim() !== profile?.displayName) || isCheckingSlug || !!slugError}
-                  >
-                    <Check className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="w-8 h-8 rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer"
-                    onClick={() => setIsEditingDisplayName(false)}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-                {/* 실시간 피드백 메시지 */}
-                <div className="text-[11px] min-h-[16px] mt-0.5">
-                  {isCheckingSlug && (
-                    <span className="text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                      <Loader2 className="w-3 h-3 animate-spin" /> 사용 가능 여부 확인 중...
-                    </span>
-                  )}
-                  {!isCheckingSlug && slugError && (
-                    <span className="text-red-500 dark:text-red-400 font-medium">{slugError}</span>
-                  )}
-                  {!isCheckingSlug && !slugError && isSlugAvailable && editDisplayName.trim() !== profile?.displayName && (
-                    <span className="text-green-600 dark:text-green-400 font-medium">사용 가능한 슬러그입니다.</span>
-                  )}
-                  {!isCheckingSlug && !slugError && editDisplayName.trim() === profile?.displayName && isEditingDisplayName && (
-                    <span className="text-slate-400 dark:text-slate-500 font-medium">현재 내 슬러그입니다.</span>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <p
-                onClick={startEditingDisplayName}
-                className="group inline-flex items-center justify-center gap-1.5 text-sm font-semibold text-indigo-500 dark:text-indigo-400 mt-1 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-800/50 rounded-lg px-2.5 py-0.5 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all"
-              >
-                @{profile?.displayName || "my_link_slug"}
-                <Pencil className="w-3.5 h-3.5 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </p>
-            )}
+            {/* DisplayName (URL Slug) */}
+            <p className="text-sm font-semibold text-indigo-500 dark:text-indigo-400 mt-1 px-2.5 py-0.5 border border-transparent">
+              @{profile?.displayName || "my_link_slug"}
+            </p>
 
             {/* Bio Edit Form */}
             {isEditingBio ? (

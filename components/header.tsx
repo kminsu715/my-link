@@ -66,9 +66,11 @@ export function Header({ totalLinks = 0, profile = null }: { totalLinks?: number
     }
   };
 
+  const userSlug = profile?.displayName || (user?.email ? user.email.split("@")[0] : "");
+
   const copyToClipboard = () => {
-    if (!profile?.displayName) return;
-    const url = `${window.location.origin}/${profile.displayName}`;
+    if (!userSlug) return;
+    const url = `${window.location.origin}/${userSlug}`;
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -76,12 +78,10 @@ export function Header({ totalLinks = 0, profile = null }: { totalLinks?: number
   };
 
   const openPublicLink = () => {
-    if (!profile?.displayName) return;
-    const url = `${window.location.origin}/${profile.displayName}`;
+    if (!userSlug) return;
+    const url = `${window.location.origin}/${userSlug}`;
     window.open(url, "_blank");
   };
-
-  const userSlug = profile?.displayName || (user?.email ? user.email.split("@")[0] : "");
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 bg-white/70 dark:bg-slate-950/70 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50 transition-colors duration-500">
@@ -106,16 +106,16 @@ export function Header({ totalLinks = 0, profile = null }: { totalLinks?: number
             </div>
           ) : user ? (
             <>
-              {/* 미리보기 버튼 (새 탭) */}
+              {/* 내 페이지 바로가기 버튼 (새 탭) */}
               {userSlug && (
                 <Button
                   asChild
                   variant="outline"
                   size="sm"
-                  className="hidden sm:flex rounded-full border-slate-200 dark:border-slate-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 px-4 cursor-pointer text-xs font-semibold"
+                  className="flex rounded-full border-slate-200 dark:border-slate-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/20 px-3 sm:px-4 cursor-pointer text-xs font-semibold"
                 >
                   <Link href={`/${userSlug}`} target="_blank" rel="noopener noreferrer">
-                    미리보기
+                    내 페이지
                   </Link>
                 </Button>
               )}

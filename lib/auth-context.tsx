@@ -23,9 +23,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const userRef = doc(db, "users", currentUser.uid);
       const userSnap = await getDoc(userRef);
+      const emailPrefix = currentUser.email ? currentUser.email.split("@")[0] : "user";
 
       if (!userSnap.exists()) {
-        const emailPrefix = currentUser.email ? currentUser.email.split("@")[0] : "user";
         await setDoc(userRef, {
           uid: currentUser.uid,
           username: currentUser.displayName || emailPrefix,
@@ -39,12 +39,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         const userData = userSnap.data();
         const updates: any = {};
+
         if (!userData.uid) {
           updates.uid = currentUser.uid;
         }
+
+        // Force sync displayName with emailPrefix (e.g., caesiumy) if mismatch
+        if (!userData.displayName || userData.displayName !== emailPrefix) {
+          updates.displayName = emailPrefix;
+        }
+
         if (currentUser.photoURL && userData.photoURL !== currentUser.photoURL) {
           updates.photoURL = currentUser.photoURL;
         }
+
         if (Object.keys(updates).length > 0) {
           await setDoc(userRef, {
             ...updates,

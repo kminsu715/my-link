@@ -30,6 +30,7 @@ export default function Page({ params }: PageProps) {
   const [targetUser, setTargetUser] = useState<UserProfile | null>(null);
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isNotFound, setIsNotFound] = useState(false);
   
   // 로그인된 세션의 프로필 정보 (Header용)
   const [loginUserProfile, setLoginUserProfile] = useState<any>(null);
@@ -45,7 +46,7 @@ export default function Page({ params }: PageProps) {
         const querySnapshot = await getDocs(q);
 
         if (querySnapshot.empty) {
-          notFound();
+          setIsNotFound(true);
           return;
         }
 
@@ -54,7 +55,7 @@ export default function Page({ params }: PageProps) {
 
         // username이 없으면 404 페이지
         if (!userData || !userData.username) {
-          notFound();
+          setIsNotFound(true);
           return;
         }
 
@@ -87,7 +88,7 @@ export default function Page({ params }: PageProps) {
         setLinks(fetchedLinks);
       } catch (error) {
         console.error("Error fetching user page: ", error);
-        notFound();
+        setIsNotFound(true);
       } finally {
         setLoading(false);
       }
@@ -128,6 +129,10 @@ export default function Page({ params }: PageProps) {
       console.error("Error updating click count: ", error);
     }
   };
+
+  if (isNotFound) {
+    notFound();
+  }
 
   if (loading) {
     return (
