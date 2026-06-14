@@ -18,7 +18,9 @@ export default function NotFound() {
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">404</h1>
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">페이지를 찾을 수 없습니다</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 max-w-[300px] leading-normal mx-auto">
-            요청하신 주소가 잘못되었거나 존재하지 않는 사용자 페이지입니다.<br />링크 주소를 다시 확인해 주세요.
+            요청하신 주소가 잘못되었거나 존재하지 않는 사용자 페이지입니다.
+            <br />
+            링크 주소를 다시 확인해 주세요.
           </p>
         </div>
 

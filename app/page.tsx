@@ -755,15 +755,15 @@ export default function Page() {
             ) : (
               <h1
                 onClick={startEditingUsername}
-                className="group inline-flex items-center justify-center gap-1.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-800/50 rounded-lg px-2.5 py-0.5 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all"
+                className="group relative inline-flex items-center justify-center text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-800/50 rounded-lg px-8 py-0.5 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all text-center"
               >
                 {profile?.username || "My Name"}
-                <Pencil className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Pencil className="absolute right-2.5 w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
               </h1>
             )}
 
             {/* DisplayName (URL Slug) */}
-            <p className="text-sm font-semibold text-indigo-500 dark:text-indigo-400 mt-1 px-2.5 py-0.5 border border-transparent">
+            <p className="text-sm font-semibold text-indigo-500 dark:text-indigo-400 mt-1 px-2.5 py-0.5 border border-transparent text-center">
               @{profile?.displayName || "my_link_slug"}
             </p>
 
@@ -783,7 +783,7 @@ export default function Page() {
                     if (e.key === "Escape") setIsEditingBio(false);
                   }}
                 />
-                <div className="flex gap-2 justify-end w-full">
+                <div className="flex gap-2 justify-center w-full">
                   <Button
                     size="sm"
                     variant="ghost"
@@ -804,10 +804,10 @@ export default function Page() {
             ) : (
               <p
                 onClick={startEditingBio}
-                className="group inline-flex items-center justify-center gap-1.5 text-sm text-slate-500 dark:text-slate-400 mt-3 max-w-[260px] mx-auto leading-relaxed cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-800/50 rounded-lg px-2.5 py-1 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all"
+                className="group relative inline-flex items-center justify-center text-sm text-slate-500 dark:text-slate-400 mt-3 max-w-[260px] mx-auto leading-relaxed cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-800/50 rounded-lg px-8 py-1 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all text-center"
               >
                 {profile?.bio || "안녕하세요! 아래 링크에서 제 모든 활동을 확인해 보세요 ✨"}
-                <Pencil className="w-3.5 h-3.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                <Pencil className="absolute right-2.5 w-3.5 h-3.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
               </p>
             )}
           </div>

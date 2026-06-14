@@ -169,13 +169,13 @@ export default function Page({ params }: PageProps) {
             </div>
           </div>
           <div className="w-full flex flex-col items-center">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 px-2.5 py-0.5 border border-transparent">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 px-2.5 py-0.5 border border-transparent text-center">
               {targetUser.username}
             </h1>
-            <p className="text-sm font-semibold text-indigo-500 dark:text-indigo-400 mt-1 px-2.5 py-0.5 border border-transparent">
+            <p className="text-sm font-semibold text-indigo-500 dark:text-indigo-400 mt-1 px-2.5 py-0.5 border border-transparent text-center">
               @{targetUser.displayName}
             </p>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-3 max-w-[260px] mx-auto leading-relaxed px-2.5 py-1 border border-transparent">
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-3 max-w-[260px] mx-auto leading-relaxed px-2.5 py-1 border border-transparent text-center">
               {targetUser.bio || "안녕하세요! 아래 링크에서 제 모든 활동을 확인해 보세요 ✨"}
             </p>
           </div>
