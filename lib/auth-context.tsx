@@ -26,16 +26,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const emailPrefix = currentUser.email ? currentUser.email.split("@")[0] : "user";
 
       if (!userSnap.exists()) {
+        const pendingSlug = typeof window !== "undefined" ? localStorage.getItem("pendingSlug") : null;
+        // 슬러그 포맷 제한 (소문자, 숫자, 언더바만 가능하도록 안전 필터링)
+        const sanitizedSlug = pendingSlug ? pendingSlug.trim().toLowerCase().replace(/[^a-z0-9_]/g, "") : "";
+        const finalSlug = sanitizedSlug || emailPrefix;
+
         await setDoc(userRef, {
           uid: currentUser.uid,
           username: currentUser.displayName || emailPrefix,
-          displayName: emailPrefix, // Used as the URL slug
+          displayName: finalSlug, // Used as the URL slug
           bio: "안녕하세요! 아래 링크에서 제 모든 활동을 확인해 보세요 ✨",
           photoURL: currentUser.photoURL || "",
           email: currentUser.email || "",
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
+
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("pendingSlug");
+        }
       } else {
         const userData = userSnap.data();
         const updates: any = {};
@@ -44,8 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           updates.uid = currentUser.uid;
         }
 
-        // Force sync displayName with emailPrefix (e.g., caesiumy) if mismatch
-        if (!userData.displayName || userData.displayName !== emailPrefix) {
+        // 기존 사용자의 displayName이 없을 경우에만 기본값 지정 (강제 동기화 제거)
+        if (!userData.displayName) {
           updates.displayName = emailPrefix;
         }
 
