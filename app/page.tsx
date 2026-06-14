@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Loader2, Pencil, Trash2, Check, X } from "lucide-react";
+import { Plus, Loader2, Pencil, Trash2, Check, X, Eye } from "lucide-react";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -115,32 +115,6 @@ export default function Page() {
     };
   }, [isEditingUsername, isEditingBio]);
 
-  const fetchLinks = async () => {
-    if (!user) return;
-    setIsLoading(true);
-    try {
-      const linksRef = collection(db, "users", user.uid, "links");
-      const q = query(linksRef, orderBy("createdAt", "desc"));
-      const snapshot = await getDocs(q);
-
-      const fetchedLinks: LinkItem[] = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          title: data.title,
-          url: data.url,
-          clickCount: data.clickCount || 0,
-          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : undefined,
-        };
-      });
-      setLinks(fetchedLinks);
-    } catch (error) {
-      console.error("Error fetching links: ", error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   useEffect(() => {
     if (!user) {
       setProfile(null);
@@ -163,11 +137,31 @@ export default function Page() {
       }
     });
 
-    // 2. Fetch links
-    fetchLinks();
+    // 2. Listen for links (실시간 구독)
+    setIsLoading(true);
+    const linksRef = collection(db, "users", user.uid, "links");
+    const q = query(linksRef, orderBy("createdAt", "desc"));
+    const unsubscribeLinks = onSnapshot(q, (snapshot) => {
+      const fetchedLinks: LinkItem[] = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        return {
+          id: docSnap.id,
+          title: data.title,
+          url: data.url,
+          clickCount: data.clickCount || 0,
+          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : undefined,
+        };
+      });
+      setLinks(fetchedLinks);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error listening to links: ", error);
+      setIsLoading(false);
+    });
 
     return () => {
       unsubscribeProfile();
+      unsubscribeLinks();
     };
   }, [user]);
 
@@ -209,7 +203,6 @@ export default function Page() {
 
       form.reset();
       setIsDialogOpen(false);
-      fetchLinks();
     } catch (error) {
       console.error("Error adding link: ", error);
       alert("링크를 추가하는 중 오류가 발생했습니다.");
@@ -246,7 +239,6 @@ export default function Page() {
       });
 
       setEditingLinkId(null);
-      fetchLinks();
     } catch (error) {
       console.error("Error updating link: ", error);
       alert("링크를 수정하는 중 오류가 발생했습니다.");
@@ -265,7 +257,6 @@ export default function Page() {
       const linkRef = doc(db, "users", user.uid, "links", deleteLinkId);
       await deleteDoc(linkRef);
       setDeleteLinkId(null);
-      fetchLinks();
     } catch (error) {
       console.error("Error deleting link: ", error);
       alert("링크를 삭제하는 중 오류가 발생했습니다.");
@@ -773,10 +764,16 @@ export default function Page() {
                           />
                         </div>
                         
-                        {/* Title */}
-                        <h2 className="w-full text-center text-base font-semibold tracking-wide text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-white transition-colors px-14">
-                          {link.title}
-                        </h2>
+                        {/* Title & Click Count */}
+                        <div className="flex-1 min-w-0 flex flex-col items-center justify-center px-12 gap-1 select-none">
+                          <h2 className="w-full text-center text-base font-semibold tracking-wide text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 dark:group-hover:text-white transition-colors truncate">
+                            {link.title}
+                          </h2>
+                          <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-400 dark:text-slate-500 bg-slate-100/70 dark:bg-slate-900/60 px-2 py-0.5 rounded-full border border-slate-100 dark:border-slate-800/80 shadow-sm shrink-0">
+                            <Eye className="w-3.5 h-3.5 text-indigo-400/80 dark:text-indigo-400" />
+                            <span>{link.clickCount || 0}</span>
+                          </div>
+                        </div>
                       </a>
                       
                       {/* Action Buttons */}

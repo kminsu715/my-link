@@ -32,15 +32,31 @@ service cloud.firestore {
       match /links/{linkId} {
         allow read: if true;
         allow delete: if request.auth != null && request.auth.uid == userId;
-        allow create, update: if request.auth != null 
-                              && request.auth.uid == userId 
-                              && isValidLinkData();
+        allow create: if request.auth != null 
+                      && request.auth.uid == userId 
+                      && isValidLinkData();
+        allow update: if (request.auth != null && request.auth.uid == userId && isValidLinkData()) 
+                      || isOnlyIncrementingClickCount();
 
         function isValidLinkData() {
           let linkData = request.resource.data;
           
           return linkData.title is string && linkData.title.trim().size() > 0
               && linkData.url is string && linkData.url.trim().size() > 0;
+        }
+
+        function isOnlyIncrementingClickCount() {
+          let incomingData = request.resource.data;
+          let existingData = resource.data;
+          let existingClickCount = ('clickCount' in existingData) ? existingData.clickCount : 0;
+          
+          return incomingData.title == existingData.title
+              && incomingData.url == existingData.url
+              && incomingData.uid == existingData.uid
+              && (!('createdAt' in existingData) || incomingData.createdAt == existingData.createdAt)
+              && (!('updatedAt' in existingData) || incomingData.updatedAt == existingData.updatedAt)
+              && incomingData.clickCount is int
+              && incomingData.clickCount == existingClickCount + 1;
         }
       }
     }
