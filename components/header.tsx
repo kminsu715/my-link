@@ -3,7 +3,7 @@
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
-import { Sun, Moon, LogOut, Loader2, Copy, Check, ExternalLink } from "lucide-react";
+import { Sun, Moon, LogOut, Loader2, Copy, Check, ExternalLink, BarChart } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 
@@ -157,6 +157,16 @@ export function Header({ totalLinks = 0, profile = null }: { totalLinks?: number
                       내 페이지 미리보기
                     </button>
                   )}
+
+                  {/* Action 1.5: Stats Dashboard */}
+                  <Link
+                    href="/stats"
+                    onClick={() => setIsDropdownOpen(false)}
+                    className="flex items-center gap-2.5 w-full px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors text-left cursor-pointer"
+                  >
+                    <BarChart className="w-4 h-4 text-slate-400" />
+                    통계 대시보드
+                  </Link>
 
                   {/* Action 2: Copy Link */}
                   {userSlug && (
